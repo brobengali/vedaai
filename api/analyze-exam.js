@@ -35,19 +35,40 @@ export default async function handler(req, res) {
       });
     }
 
-    // Standard Gemini 1.5 Flash Vision Endpoint
-    const MODEL_NAME = "gemini-1.5-flash";
+    const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
-    const response = await fetch(API_URL, {
+    const headers = {
+      "Content-Type": "application/json",
+      "x-goog-api-key": GEMINI_API_KEY
+    };
+
+    let response = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: bodyData
     });
 
-    const data = await response.json();
+    let data = await response.json();
+
+    // Fallback try without query param if needed
+    if (!response.ok && data?.error?.message?.includes("not valid")) {
+      const ALT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
+      response = await fetch(ALT_URL, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Authorization": `Bearer ${GEMINI_API_KEY}`
+        },
+        body: bodyData
+      });
+      const altData = await response.json();
+      if (response.ok) {
+        data = altData;
+      }
+    }
 
     if (!response.ok) {
       const keyPrefix = GEMINI_API_KEY.length > 8 ? GEMINI_API_KEY.substring(0, 8) + "..." : "INVALID_SHORT";
