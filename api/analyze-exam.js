@@ -19,7 +19,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY ;
+    const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
+    if (!GEMINI_API_KEY) {
+      return res.status(400).json({ error: "GEMINI_API_KEY environment variable is not configured on Vercel. Please add it under Vercel Settings -> Environment Variables and redeploy." });
+    }
     const MODEL_NAME = "gemini-3.6-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 

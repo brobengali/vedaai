@@ -10,7 +10,7 @@ export default defineConfig({
       '/api/analyze-exam': {
         target: 'https://generativelanguage.googleapis.com',
         changeOrigin: true,
-        rewrite: (path) => `/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY || 'AIzaSyCgaCHS0SXw-lzuJPsp9TBXbL9sRG5q3-I'}`
+        rewrite: (path) => `/v1beta/models/gemini-3.6-flash:generateContent?key=${process.env.GEMINI_API_KEY || ''}`
       }
     }
   }
