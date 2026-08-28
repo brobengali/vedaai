@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.6-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
@@ -49,9 +49,9 @@ export default async function handler(req, res) {
 
     let data = await response.json();
 
-    // Fallback to gemini-2.0-flash if model endpoint fails
+    // Fallback if model endpoint requires gemini-1.5-flash
     if (!response.ok && data?.error?.message?.includes("not found")) {
-      const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
       response = await fetch(FALLBACK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
