@@ -1,3 +1,11 @@
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
+
 export default async function handler(req, res) {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -21,28 +29,45 @@ export default async function handler(req, res) {
   try {
     const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
     if (!GEMINI_API_KEY) {
-      return res.status(400).json({ error: "GEMINI_API_KEY environment variable is not configured on Vercel. Please add it under Vercel Settings -> Environment Variables and redeploy." });
+      return res.status(400).json({ 
+        error: { 
+          message: "GEMINI_API_KEY environment variable is not configured on Vercel. Please add it under Vercel Settings -> Environment Variables and redeploy." 
+        } 
+      });
     }
+
     const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-1.5-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
-    const response = await fetch(API_URL, {
+    let response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: bodyData
     });
 
-    const data = await response.json();
+    let data = await response.json();
+
+    // Fallback to gemini-2.0-flash if model endpoint fails
+    if (!response.ok && data?.error?.message?.includes("not found")) {
+      const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+      response = await fetch(FALLBACK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: bodyData
+      });
+      data = await response.json();
+    }
 
     if (!response.ok) {
+      console.error("Gemini API Error Response:", data);
       return res.status(response.status).json(data);
     }
 
     return res.status(200).json(data);
   } catch (error) {
     console.error("Vercel Serverless Function Error:", error);
-    return res.status(500).json({ error: error.message || "Internal server error" });
+    return res.status(500).json({ error: { message: error.message || "Internal server error" } });
   }
 }
