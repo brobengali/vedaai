@@ -36,29 +36,18 @@ export default async function handler(req, res) {
       });
     }
 
-    const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.6-flash";
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+    // Standard Gemini 1.5 Flash Vision Model
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
     const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
-    let response = await fetch(API_URL, {
+    const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: bodyData
     });
 
-    let data = await response.json();
-
-    // Fallback if model endpoint requires gemini-1.5-flash
-    if (!response.ok && data?.error?.message?.includes("not found")) {
-      const FALLBACK_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-      response = await fetch(FALLBACK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: bodyData
-      });
-      data = await response.json();
-    }
+    const data = await response.json();
 
     if (!response.ok) {
       console.error("Gemini API Error Response:", data);
