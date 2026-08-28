@@ -16,7 +16,6 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
-  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -31,12 +30,13 @@ export default async function handler(req, res) {
     if (!GEMINI_API_KEY) {
       return res.status(400).json({ 
         error: { 
-          message: "GEMINI_API_KEY environment variable is not configured on Vercel. Please add it under Vercel Settings -> Environment Variables and redeploy." 
+          message: "GEMINI_API_KEY environment variable is NOT set on Vercel. Please add GEMINI_API_KEY in Vercel Settings -> Environment Variables and redeploy." 
         } 
       });
     }
 
-    const MODEL_NAME = "gemini-3.6-flash";
+    // Standard Gemini 1.5 Flash Vision Endpoint
+    const MODEL_NAME = "gemini-1.5-flash";
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
@@ -50,8 +50,15 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Gemini API Error Response:", data);
-      return res.status(response.status).json(data);
+      const keyPrefix = GEMINI_API_KEY.length > 8 ? GEMINI_API_KEY.substring(0, 8) + "..." : "INVALID_SHORT";
+      const detailedMessage = `Google API Error (${response.status}): ${data?.error?.message || 'Unknown'}. [Key Used: ${keyPrefix}, Length: ${GEMINI_API_KEY.length}]`;
+      console.error(detailedMessage);
+      return res.status(response.status).json({
+        error: {
+          message: detailedMessage,
+          details: data?.error
+        }
+      });
     }
 
     return res.status(200).json(data);
