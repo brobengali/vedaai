@@ -1,33 +1,65 @@
 const API_URL = "/api/analyze-exam";
 
 /**
- * Converts a browser File object to base64 inlineData for Gemini API.
+ * Compresses an image file by resizing and converting to JPEG.
+ * Returns a base64 data URL. PDFs are passed through unchanged.
  */
-export const fileToGenerativePart = (file) => {
+const compressImage = (file, maxDimension = 1024, quality = 0.55) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      // Scale down if either dimension exceeds max
+      if (width > maxDimension || height > maxDimension) {
+        const ratio = Math.min(maxDimension / width, maxDimension / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image: ' + file.name));
+    };
+    img.src = url;
+  });
+};
+
+/**
+ * Converts a browser File object to base64 inlineData for Gemini API.
+ * Images are compressed first; PDFs are sent as-is.
+ */
+export const fileToGenerativePart = async (file) => {
+  const ext = file.name.split('.').pop().toLowerCase();
+  const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext) ||
+    (file.type && file.type.startsWith('image/'));
+
+  if (isImage) {
+    // Compress image to reduce payload size
+    const dataUrl = await compressImage(file);
+    const base64Data = dataUrl.split(',')[1];
+    return { inlineData: { data: base64Data, mimeType: 'image/jpeg' } };
+  }
+
+  // For PDFs and other files, read as-is
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Data = reader.result.split(',')[1];
       let mimeType = file.type;
-      // Fallback mime type detection
       if (!mimeType || mimeType === 'application/octet-stream') {
-        const ext = file.name.split('.').pop().toLowerCase();
-        const mimeMap = {
-          pdf: 'application/pdf',
-          png: 'image/png',
-          jpg: 'image/jpeg',
-          jpeg: 'image/jpeg',
-          webp: 'image/webp',
-          gif: 'image/gif',
-        };
-        mimeType = mimeMap[ext] || 'image/jpeg';
+        const mimeMap = { pdf: 'application/pdf' };
+        mimeType = mimeMap[ext] || 'application/octet-stream';
       }
-      resolve({
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType
-        }
-      });
+      resolve({ inlineData: { data: base64Data, mimeType } });
     };
     reader.onerror = () => reject(new Error('Failed to read file: ' + file.name));
     reader.readAsDataURL(file);
