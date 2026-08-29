@@ -74,7 +74,8 @@ export default async function handler(req, res) {
       return res.status(response.status).json({
         error: {
           message: detailedMessage,
-          details: data?.error
+          details: data?.error,
+          source: "google_api"
         }
       });
     }
@@ -82,6 +83,11 @@ export default async function handler(req, res) {
     return res.status(200).json(data);
   } catch (error) {
     console.error("Vercel Serverless Function Error:", error);
-    return res.status(500).json({ error: { message: error.message || "Internal server error" } });
+    return res.status(500).json({ 
+      error: { 
+        message: `[VERCEL FUNCTION ERROR] ${error.message || "Internal server error"}`,
+        source: "vercel_function"
+      } 
+    });
   }
 }

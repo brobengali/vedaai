@@ -223,13 +223,15 @@ IMPORTANT:
     let msg = `Gemini API Error (${response.status})`;
     try {
       const parsed = JSON.parse(errBody);
-      msg = parsed.error?.message || msg;
+      // Extract full error message from various possible response shapes
+      msg = parsed.error?.message || parsed.message || parsed.error || msg;
+      if (typeof msg === 'object') msg = JSON.stringify(msg);
     } catch { /* use default */ }
 
     lastError = new Error(msg);
 
-    // Only retry on transient errors
-    if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES) {
+    // Retry on transient errors (500, 503, 429)
+    if ((response.status === 500 || response.status === 503 || response.status === 429) && attempt < MAX_RETRIES) {
       const waitMs = attempt * 3000; // 3s, 6s
       if (onProgress) onProgress('sending'); // show "retrying"
       await new Promise(r => setTimeout(r, waitMs));
