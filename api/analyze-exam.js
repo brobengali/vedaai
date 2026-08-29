@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     // Models to try in order (primary → fallback)
     const MODELS = (process.env.GEMINI_MODEL)
       ? [process.env.GEMINI_MODEL]
-      : ['gemini-3.6-flash', 'gemini-3.0-flash'];
+      : ['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
 
     // Ensure request body is properly parsed
     const bodyData = typeof req.body === 'string'
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
 
       // Only fallback on capacity/not-found errors
       const status = response.status;
-      if (status === 429 || status === 503 || status === 404) {
+      if (status === 429 || status === 500 || status === 503 || status === 404) {
         console.log(`Model ${model} failed (${status}), trying next...`);
         continue;
       }
