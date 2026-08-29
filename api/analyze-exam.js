@@ -37,51 +37,42 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get model name with fallback
-    const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+    // Models to try in order (primary → fallback)
+    const MODELS = (process.env.GEMINI_MODEL)
+      ? [process.env.GEMINI_MODEL]
+      : ['gemini-3.6-flash', 'gemini-3.0-flash'];
 
     // Ensure request body is properly parsed
     const bodyData = typeof req.body === 'string'
       ? req.body
       : JSON.stringify(req.body);
 
-    // Build the API URL with the key in query parameter (recommended approach)
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+    let response;
+    let data;
+    let MODEL_NAME;
 
-    // First attempt with API key in URL
-    let response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: bodyData,
-    });
+    // Try each model until one succeeds
+    for (const model of MODELS) {
+      MODEL_NAME = model;
+      const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-    let data = await response.json();
-
-    // If first attempt fails with authentication error, try Bearer token approach
-    if (!response.ok && data?.error?.message?.includes('not valid')) {
-      console.log('Trying alternative authentication method...');
-
-      const ALT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
-
-      response = await fetch(ALT_URL, {
+      response = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GEMINI_API_KEY}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: bodyData,
       });
 
-      const altData = await response.json();
+      data = await response.json();
 
-      if (response.ok) {
-        data = altData;
-      } else {
-        // If both attempts fail, use the second response for error reporting
-        data = altData;
+      if (response.ok) break; // Success — stop trying
+
+      // Only fallback on capacity/not-found errors
+      const status = response.status;
+      if (status === 429 || status === 503 || status === 404) {
+        console.log(`Model ${model} failed (${status}), trying next...`);
+        continue;
       }
+      break; // For auth or other errors, don't retry with a different model
     }
 
     // Handle API errors
