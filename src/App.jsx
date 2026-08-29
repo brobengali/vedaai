@@ -5,6 +5,7 @@ import Header from './components/Header'
 import UploadScreen from './components/UploadScreen'
 import ResultsScreen from './components/ResultsScreen'
 import HistoryScreen from './components/HistoryScreen'
+import ExtractionLoadingScreen from './components/ExtractionLoadingScreen'
 import { analyzeExamDocuments } from './services/geminiService'
 
 function App() {
@@ -79,34 +80,34 @@ function App() {
             <button onClick={() => setErrorMsg(null)}>✕</button>
           </div>
         )}
-        {isMapping && progressMsg && (
-          <div className="progress-banner">
-            <span className="progress-spinner"></span>
-            <span>{progressMsg}</span>
-          </div>
-        )}
         <div className="content-area">
-          {currentView === 'history' && (
-            <HistoryScreen 
-              onNewUpload={() => { setErrorMsg(null); setCurrentView('upload'); }}
-              onOpenReview={openReview}
-              reviews={reviewHistory}
-            />
-          )}
-          
-          {currentView === 'upload' && (
-             <UploadScreen 
-               onStartMapping={handleStartMapping} 
-               isMapping={isMapping}
-               onBack={() => setCurrentView('history')}
-             />
-          )}
+          {isMapping ? (
+            <ExtractionLoadingScreen />
+          ) : (
+            <>
+              {currentView === 'history' && (
+                <HistoryScreen 
+                  onNewUpload={() => { setErrorMsg(null); setCurrentView('upload'); }}
+                  onOpenReview={openReview}
+                  reviews={reviewHistory}
+                />
+              )}
+              
+              {currentView === 'upload' && (
+                 <UploadScreen 
+                   onStartMapping={handleStartMapping} 
+                   isMapping={isMapping}
+                   onBack={() => setCurrentView('history')}
+                 />
+              )}
 
-          {currentView === 'results' && resultsData && (
-            <ResultsScreen 
-              data={resultsData} 
-              onBack={() => setCurrentView('history')} 
-            />
+              {currentView === 'results' && resultsData && (
+                <ResultsScreen 
+                  data={resultsData} 
+                  onBack={() => setCurrentView('history')} 
+                />
+              )}
+            </>
           )}
         </div>
       </main>
