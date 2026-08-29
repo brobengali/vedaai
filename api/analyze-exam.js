@@ -16,75 +16,111 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
+  // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
+  // Only allow POST method
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    // Validate API key
     const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || '').trim();
     if (!GEMINI_API_KEY) {
-      return res.status(400).json({ 
-        error: { 
-          message: "GEMINI_API_KEY environment variable is NOT set on Vercel. Please add GEMINI_API_KEY in Vercel Settings -> Environment Variables and redeploy." 
-        } 
+      console.error('GEMINI_API_KEY is not set');
+      return res.status(500).json({
+        error: 'Server configuration error: GEMINI_API_KEY is missing'
       });
     }
 
-    const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-3.7-flash";
+    // Get model name with fallback
+    const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp';
+
+    // Ensure request body is properly parsed
+    const bodyData = typeof req.body === 'string'
+      ? req.body
+      : JSON.stringify(req.body);
+
+    // Build the API URL with the key in query parameter (recommended approach)
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
-    const bodyData = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-
-    const headers = {
-      "Content-Type": "application/json",
-      "x-goog-api-key": GEMINI_API_KEY
-    };
-
+    // First attempt with API key in URL
     let response = await fetch(API_URL, {
-      method: "POST",
-      headers,
-      body: bodyData
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: bodyData,
     });
 
     let data = await response.json();
 
-    // Fallback try without query param if needed
-    if (!response.ok && data?.error?.message?.includes("not valid")) {
+    // If first attempt fails with authentication error, try Bearer token approach
+    if (!response.ok && data?.error?.message?.includes('not valid')) {
+      console.log('Trying alternative authentication method...');
+
       const ALT_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
+
       response = await fetch(ALT_URL, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          ...headers,
-          "Authorization": `Bearer ${GEMINI_API_KEY}`
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GEMINI_API_KEY}`,
         },
-        body: bodyData
+        body: bodyData,
       });
+
       const altData = await response.json();
+
       if (response.ok) {
+        data = altData;
+      } else {
+        // If both attempts fail, use the second response for error reporting
         data = altData;
       }
     }
 
+    // Handle API errors
     if (!response.ok) {
-      const keyPrefix = GEMINI_API_KEY.length > 8 ? GEMINI_API_KEY.substring(0, 8) + "..." : "INVALID_SHORT";
-      const detailedMessage = `Google API Error (${response.status}): ${data?.error?.message || 'Unknown'}. [Key Used: ${keyPrefix}, Length: ${GEMINI_API_KEY.length}]`;
-      console.error(detailedMessage);
+      const errorMessage = data?.error?.message || 'Unknown error';
+      console.error(`Google API Error (${response.status}):`, errorMessage);
+
+      // Provide user-friendly error messages
+      if (response.status === 403 || response.status === 401) {
+        return res.status(response.status).json({
+          error: 'Authentication failed. Please check your GEMINI_API_KEY.',
+          details: errorMessage
+        });
+      } else if (response.status === 429) {
+        return res.status(response.status).json({
+          error: 'Rate limit exceeded. Please try again later.',
+          details: errorMessage
+        });
+      } else if (response.status === 404) {
+        return res.status(response.status).json({
+          error: `Model '${MODEL_NAME}' not found. Check GEMINI_MODEL environment variable.`,
+          details: errorMessage
+        });
+      }
+
       return res.status(response.status).json({
-        error: {
-          message: detailedMessage,
-          details: data?.error
-        }
+        error: `Google API Error (${response.status})`,
+        details: errorMessage
       });
     }
 
+    // Success
     return res.status(200).json(data);
+
   } catch (error) {
-    console.error("Vercel Serverless Function Error:", error);
-    return res.status(500).json({ error: { message: error.message || "Internal server error" } });
+    console.error('Vercel Serverless Function Error:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      message: error.message || 'An unexpected error occurred'
+    });
   }
 }
