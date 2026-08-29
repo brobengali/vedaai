@@ -1,65 +1,33 @@
 const API_URL = "/api/analyze-exam";
 
 /**
- * Compresses an image file by resizing and converting to JPEG.
- * Returns a base64 data URL. PDFs are passed through unchanged.
- */
-const compressImage = (file, maxDimension = 1024, quality = 0.55) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      let { width, height } = img;
-      // Scale down if either dimension exceeds max
-      if (width > maxDimension || height > maxDimension) {
-        const ratio = Math.min(maxDimension / width, maxDimension / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      resolve(dataUrl);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to load image: ' + file.name));
-    };
-    img.src = url;
-  });
-};
-
-/**
  * Converts a browser File object to base64 inlineData for Gemini API.
- * Images are compressed first; PDFs are sent as-is.
  */
-export const fileToGenerativePart = async (file) => {
-  const ext = file.name.split('.').pop().toLowerCase();
-  const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext) ||
-    (file.type && file.type.startsWith('image/'));
-
-  if (isImage) {
-    // Compress image to reduce payload size
-    const dataUrl = await compressImage(file);
-    const base64Data = dataUrl.split(',')[1];
-    return { inlineData: { data: base64Data, mimeType: 'image/jpeg' } };
-  }
-
-  // For PDFs and other files, read as-is
+export const fileToGenerativePart = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64Data = reader.result.split(',')[1];
       let mimeType = file.type;
+      // Fallback mime type detection
       if (!mimeType || mimeType === 'application/octet-stream') {
-        const mimeMap = { pdf: 'application/pdf' };
-        mimeType = mimeMap[ext] || 'application/octet-stream';
+        const ext = file.name.split('.').pop().toLowerCase();
+        const mimeMap = {
+          pdf: 'application/pdf',
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          webp: 'image/webp',
+          gif: 'image/gif',
+        };
+        mimeType = mimeMap[ext] || 'image/jpeg';
       }
-      resolve({ inlineData: { data: base64Data, mimeType } });
+      resolve({
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      });
     };
     reader.onerror = () => reject(new Error('Failed to read file: ' + file.name));
     reader.readAsDataURL(file);
@@ -223,19 +191,13 @@ IMPORTANT:
     let msg = `Gemini API Error (${response.status})`;
     try {
       const parsed = JSON.parse(errBody);
-      // Extract full error message from various possible response shapes
-      msg = parsed.error?.message || parsed.message || parsed.error || msg;
-      if (typeof msg === 'object') msg = JSON.stringify(msg);
-    } catch { 
-      // If parsing fails (e.g., Vercel returns HTML 500 page), show a snippet of the raw text
-      const snippet = errBody.substring(0, 150).replace(/\n/g, ' ');
-      msg = `API Error (${response.status}): ${snippet}...`;
-    }
+      msg = parsed.error?.message || msg;
+    } catch { /* use default */ }
 
     lastError = new Error(msg);
 
-    // Retry on transient errors (500, 503, 429)
-    if ((response.status === 500 || response.status === 503 || response.status === 429) && attempt < MAX_RETRIES) {
+    // Only retry on transient errors
+    if ((response.status === 503 || response.status === 429) && attempt < MAX_RETRIES) {
       const waitMs = attempt * 3000; // 3s, 6s
       if (onProgress) onProgress('sending'); // show "retrying"
       await new Promise(r => setTimeout(r, waitMs));
