@@ -226,7 +226,11 @@ IMPORTANT:
       // Extract full error message from various possible response shapes
       msg = parsed.error?.message || parsed.message || parsed.error || msg;
       if (typeof msg === 'object') msg = JSON.stringify(msg);
-    } catch { /* use default */ }
+    } catch { 
+      // If parsing fails (e.g., Vercel returns HTML 500 page), show a snippet of the raw text
+      const snippet = errBody.substring(0, 150).replace(/\n/g, ' ');
+      msg = `API Error (${response.status}): ${snippet}...`;
+    }
 
     lastError = new Error(msg);
 
