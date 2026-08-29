@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     if (!GEMINI_API_KEY) {
       return res.status(400).json({ 
         error: { 
-          message: "GEMINI_API_KEY environment variable is NOT set on Vercel (Redeploy verified). Please ensure you saved it under the exact name 'GEMINI_API_KEY' (no spaces) and triggered a NEW deployment." 
+          message: "GEMINI_API_KEY environment variable is NOT set on Vercel. Please add GEMINI_API_KEY in Vercel Settings -> Environment Variables and redeploy." 
         } 
       });
     }
